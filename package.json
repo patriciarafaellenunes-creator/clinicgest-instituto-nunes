@@ -1,0 +1,28 @@
+{
+  "name": "clinicgest-api",
+  "version": "1.0.0",
+  "description": "ClinicGest: sistema completo (Fase 1 + Fase 2) + autenticação real + RLS validado + geração de PDF + 2 agentes de IA",
+  "main": "index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "node test/auth.test.js && node test/financial.test.js && node test/patients-agenda.test.js && node test/leads-budgets.test.js && node test/inventory.test.js && node test/agent.test.js && node test/purchasing.test.js && node test/clinical-records.test.js && node test/odontogram.test.js && node test/periodontal.test.js && node test/treatment-plans.test.js && node test/clinical-documents.test.js && node test/clinical-exams.test.js && node test/patient-files.test.js && node test/documents.test.js && node test/terms-library.test.js && node test/professional-contracts.test.js && node test/supplier-contracts.test.js && node test/document-automation.test.js && node test/document-agent.test.js && node test/lab-orders.test.js && node test/commissions.test.js && node test/pdf.test.js && node test/daily-shifts.test.js && node test/reference-data.test.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.3",
+    "pdf-lib": "^1.17.1",
+    "pg": "^8.22.0",
+    "uuid": "^14.0.1",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "pdf-parse": "^2.4.5",
+    "pg-mem": "^3.0.14"
+  }
+}
