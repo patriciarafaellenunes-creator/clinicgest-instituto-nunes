@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  unit-tests:
+    name: Testes de serviço (pg-mem)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+
+  rls-integration:
+    name: RLS contra Postgres real
+    runs-on: ubuntu-latest
+    # test-integration/rls-real-postgres.test.js testa isolamento entre
+    # clínicas de verdade — pg-mem não implementa RLS nem
+    # current_setting/set_config, então esse teste só vale alguma coisa
+    # rodando aqui, contra um Postgres de verdade.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: clinicgest_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGDATABASE: clinicgest_test
+      PGUSER: app_user
+      PGPASSWORD: app-user-ci-password
+      AUTH_PGUSER: auth_service_user
+      AUTH_PGPASSWORD: auth-service-user-ci-password
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      - name: Aplicar schema e políticas de RLS
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d clinicgest_test -f 02-schema-mvp.sql
+          psql -h localhost -U postgres -d clinicgest_test -f 03-row-level-security.sql
+
+      # Duas roles de aplicação (nenhuma superusuário nem dona das tabelas —
+      # o schema acima foi criado pela role postgres), como documentado no
+      # checklist de 03-row-level-security.sql: app_user roda sob RLS de
+      # verdade, auth_service_user tem BYPASSRLS e é usada só por
+      # login/bootstrap-clinic.
+      - name: Criar roles app_user e auth_service_user
+        env:
+          PGPASSWORD: postgres
+          PGPASSWORD_APP: app-user-ci-password
+          PGPASSWORD_AUTH: auth-service-user-ci-password
+        run: |
+          psql -h localhost -U postgres -d clinicgest_test -c "CREATE ROLE app_user LOGIN PASSWORD '${PGPASSWORD_APP}';"
+          psql -h localhost -U postgres -d clinicgest_test -c "CREATE ROLE auth_service_user LOGIN PASSWORD '${PGPASSWORD_AUTH}' BYPASSRLS;"
+          psql -h localhost -U postgres -d clinicgest_test -c "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app_user, auth_service_user;"
+          psql -h localhost -U postgres -d clinicgest_test -c "GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO app_user, auth_service_user;"
+
+      - run: node test-integration/rls-real-postgres.test.js
