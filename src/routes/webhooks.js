@@ -84,4 +84,8 @@ router.post('/clicksign', express.raw({ type: 'application/json' }), async (req,
   }
 });
 
+// Exposto para teste unitário direto (test/webhooks.test.js) — a rota em si
+// continua sendo o export principal, usado por src/index.js via app.use().
+router.verifyClicksignSignature = verifyClicksignSignature;
+
 module.exports = router;
