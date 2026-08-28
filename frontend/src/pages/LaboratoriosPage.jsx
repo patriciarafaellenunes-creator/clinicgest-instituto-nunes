@@ -31,15 +31,21 @@ function formatCurrency(value) {
 function formatDate(dateStr) {
   return dateStr ? new Date(dateStr).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : '—';
 }
+function isOverdue(order) {
+  if (!order.expected_delivery_date) return false;
+  if (['recebido', 'instalado', 'finalizado', 'cancelado'].includes(order.status)) return false;
+  return new Date(order.expected_delivery_date) < new Date(new Date().toDateString());
+}
 
 const emptyForm = {
   patientQuery: '', patientId: null, patientName: '', professionalId: '',
   supplierId: '', newSupplierName: '', workType: '', toothOrRegion: '', color: '', material: '',
-  cost: '', expectedDeliveryDate: '',
+  cost: '', expectedDeliveryDate: '', notes: '',
 };
 
 export function LaboratoriosPage() {
   const [orders, setOrders] = useState([]);
+  const [overdue, setOverdue] = useState([]);
   const [professionals, setProfessionals] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -60,12 +66,14 @@ export function LaboratoriosPage() {
     setLoading(true);
     setPageError(null);
     try {
-      const [orderRows, profs, supps] = await Promise.all([
+      const [orderRows, overdueRows, profs, supps] = await Promise.all([
         api.get('/lab-orders'),
+        api.get('/lab-orders/overdue'),
         api.get('/professionals'),
         api.get('/suppliers'),
       ]);
       setOrders(orderRows);
+      setOverdue(overdueRows);
       setProfessionals(profs);
       setSuppliers(supps);
     } catch {
@@ -110,6 +118,7 @@ export function LaboratoriosPage() {
         workType: form.workType.trim(), toothOrRegion: form.toothOrRegion || null,
         color: form.color || null, material: form.material || null,
         cost: form.cost ? Number(form.cost) : null, expectedDeliveryDate: form.expectedDeliveryDate || null,
+        notes: form.notes || null,
       });
       setForm(emptyForm);
       setShowForm(false);
@@ -153,14 +162,31 @@ export function LaboratoriosPage() {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
         <div>
-          <h1>Laboratórios</h1>
-          <p style={{ color: 'var(--muted)' }}>Finalizar um trabalho gera a conta a pagar ao laboratório automaticamente.</p>
+          <h1>Laboratórios e Próteses</h1>
+          <p style={{ color: 'var(--muted)' }}>Controle de trabalhos protéticos enviados a laboratório — do pedido à instalação. Finalizar um trabalho gera a conta a pagar automaticamente.</p>
         </div>
         <button className="btn btn-primary" onClick={() => setShowForm((v) => !v)}>{showForm ? 'Cancelar' : '+ Novo trabalho'}</button>
       </div>
 
       {pageError && <div className="error-banner">{pageError}</div>}
       {actionError && <div className="error-banner">{actionError}</div>}
+
+      {overdue.length > 0 && (
+        <div className="chart-tab-block warn" style={{ marginBottom: 20 }}>
+          <h2>Próteses atrasadas ({overdue.length})</h2>
+          {overdue.slice(0, 5).map((item) => (
+            <div className="alert-row" key={item.id}>
+              <span>{item.patient_name} · {item.work_type} — {item.supplier_name}</span>
+              <span className="mono">previsto {formatDate(item.expected_delivery_date)}</span>
+            </div>
+          ))}
+          {overdue.length > 5 && (
+            <p style={{ marginTop: 10, fontSize: 12.5, color: 'var(--muted)' }}>
+              + {overdue.length - 5} outros trabalhos atrasados.
+            </p>
+          )}
+        </div>
+      )}
 
       {showForm && (
         <div className="card" style={{ marginBottom: 20 }}>
@@ -215,6 +241,10 @@ export function LaboratoriosPage() {
               <div className="field"><label>Custo (opcional)</label><input type="number" min="0" step="0.01" value={form.cost} onChange={(e) => setForm((f) => ({ ...f, cost: e.target.value }))} /></div>
               <div className="field"><label>Previsão de entrega (opcional)</label><input type="date" value={form.expectedDeliveryDate} onChange={(e) => setForm((f) => ({ ...f, expectedDeliveryDate: e.target.value }))} /></div>
             </div>
+            <div className="field" style={{ marginBottom: 12 }}>
+              <label>Observações (opcional)</label>
+              <textarea rows={2} value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} placeholder="Instruções específicas para o laboratório…" />
+            </div>
             <button className="btn btn-primary" type="submit" disabled={submitting}>{submitting ? 'Salvando…' : 'Salvar trabalho'}</button>
           </form>
         </div>
@@ -232,7 +262,9 @@ export function LaboratoriosPage() {
                   <td>{o.patient_name}</td>
                   <td>{o.supplier_name}</td>
                   <td>{o.work_type}{o.cost ? ` · ${formatCurrency(o.cost)}` : ''}</td>
-                  <td className="mono">{formatDate(o.expected_delivery_date)}</td>
+                  <td className="mono" style={isOverdue(o) ? { color: 'var(--alert)' } : undefined}>
+                    {formatDate(o.expected_delivery_date)}{isOverdue(o) ? ' ⚠' : ''}
+                  </td>
                   <td><span className={statusBadgeClass(o.status)}>{STATUS_LABELS[o.status] || o.status}</span></td>
                   <td>
                     {TERMINAL_STATUSES.includes(o.status) ? (

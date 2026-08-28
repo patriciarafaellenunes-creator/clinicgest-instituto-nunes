@@ -27,7 +27,7 @@ const NAV_SECTIONS = [
     items: [
       { to: '/estoque', label: 'Estoque' },
       { to: '/compras', label: 'Compras' },
-      { to: '/laboratorios', label: 'Laboratórios' },
+      { to: '/laboratorios', label: 'Laboratórios / Próteses' },
     ],
   },
   {

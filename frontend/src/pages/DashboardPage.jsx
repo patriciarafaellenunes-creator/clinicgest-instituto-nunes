@@ -9,6 +9,7 @@ function formatCurrency(value) {
 export function DashboardPage() {
   const [dashboard, setDashboard] = useState(null);
   const [overdue, setOverdue] = useState([]);
+  const [overdueLabOrders, setOverdueLabOrders] = useState([]);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -17,13 +18,15 @@ export function DashboardPage() {
 
     async function load() {
       try {
-        const [dashboardData, overdueData] = await Promise.all([
+        const [dashboardData, overdueData, overdueLabData] = await Promise.all([
           api.get('/financial/dashboard'),
           api.get('/financial/accounts-receivable/overdue'),
+          api.get('/lab-orders/overdue').catch(() => []),
         ]);
         if (cancelled) return;
         setDashboard(dashboardData);
         setOverdue(overdueData);
+        setOverdueLabOrders(overdueLabData);
       } catch (err) {
         if (cancelled) return;
         if (err instanceof ApiError && err.status === 403) {
@@ -70,6 +73,25 @@ export function DashboardPage() {
           {overdue.length > 5 && (
             <p style={{ marginTop: 10, fontSize: 12.5, color: 'var(--muted)' }}>
               + {overdue.length - 5} outros pacientes com pendências.
+            </p>
+          )}
+        </div>
+      )}
+
+      {overdueLabOrders.length > 0 && (
+        <div className="chart-tab-block warn">
+          <h2>Próteses/laboratório atrasados ({overdueLabOrders.length})</h2>
+          {overdueLabOrders.slice(0, 5).map((item) => (
+            <div className="alert-row" key={item.id}>
+              <span>{item.patient_name} · {item.work_type} — {item.supplier_name}</span>
+              <span className="mono">
+                {new Date(item.expected_delivery_date).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}
+              </span>
+            </div>
+          ))}
+          {overdueLabOrders.length > 5 && (
+            <p style={{ marginTop: 10, fontSize: 12.5, color: 'var(--muted)' }}>
+              + {overdueLabOrders.length - 5} outros trabalhos atrasados.
             </p>
           )}
         </div>
