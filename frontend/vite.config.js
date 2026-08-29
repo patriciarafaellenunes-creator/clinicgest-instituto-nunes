@@ -11,9 +11,15 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
-        target: process.env.VITE_API_URL || 'http://localhost:3002',
+        target: process.env.VITE_API_URL || 'http://localhost:3000',
         changeOrigin: true,
       },
     },
+  },
+  // Em produção o preview server roda atrás do domínio público do Railway
+  // (ex: clinicgest.up.railway.app), não localhost — sem isso o Vite recusa
+  // a requisição com "Blocked request. This host is not allowed."
+  preview: {
+    allowedHosts: true,
   },
 });
