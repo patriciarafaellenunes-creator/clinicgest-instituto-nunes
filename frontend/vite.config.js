@@ -16,4 +16,10 @@ export default defineConfig({
       },
     },
   },
+  // Em produção o preview server roda atrás do domínio público do Railway
+  // (ex: clinicgest.up.railway.app), não localhost — sem isso o Vite recusa
+  // a requisição com "Blocked request. This host is not allowed."
+  preview: {
+    allowedHosts: true,
+  },
 });
