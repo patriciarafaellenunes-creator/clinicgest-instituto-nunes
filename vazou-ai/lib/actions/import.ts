@@ -107,6 +107,8 @@ async function runImportBatch(
       return { error: "Não foi possível iniciar a importação.", success: null };
     }
 
+    let skippedRows = 0;
+
     for (const row of rows) {
       const { data: contact, error: contactError } = await supabase
         .from("contacts")
@@ -119,7 +121,10 @@ async function runImportBatch(
         .select("id")
         .single();
 
-      if (contactError || !contact) continue;
+      if (contactError || !contact) {
+        skippedRows++;
+        continue;
+      }
 
       const { data: conversation, error: conversationError } = await supabase
         .from("conversations")
@@ -133,7 +138,10 @@ async function runImportBatch(
         .select("id")
         .single();
 
-      if (conversationError || !conversation) continue;
+      if (conversationError || !conversation) {
+        skippedRows++;
+        continue;
+      }
 
       // MVP: a conversa colada/importada entra como uma única mensagem do
       // cliente. Granularidade por mensagem (com timestamps individuais) é
@@ -185,7 +193,7 @@ async function runImportBatch(
       error: null,
       success: `Importação concluída: ${result.processed} conversa(s) processada(s)${
         result.failed > 0 ? `, ${result.failed} com erro (marcadas para revisão)` : ""
-      }.`,
+      }${skippedRows > 0 ? `. ${skippedRows} linha(s) do arquivo não puderam ser importadas` : ""}.`,
     };
   } catch (err) {
     if (err instanceof Error && err.message === "NOT_A_MEMBER") {

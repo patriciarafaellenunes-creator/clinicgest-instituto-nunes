@@ -20,17 +20,26 @@ import type { NegotiationStage } from "@/lib/scoring";
  * quem invoca é responsável por já ter validado que a operação está
  * autorizada para `companyId` (ver lib/supabase/membership.ts).
  */
+/** Um job em `running` por mais que isto sem concluir é considerado travado e reprocessado. */
+const STALE_RUNNING_MINUTES = 10;
+
 export async function processQueuedJobs(
   supabase: SupabaseClient<Database>,
   companyId: string,
   limit = 50,
 ): Promise<{ processed: number; failed: number }> {
+  const staleCutoff = new Date(Date.now() - STALE_RUNNING_MINUTES * 60 * 1000).toISOString();
+
+  // Pega jobs `queued` normalmente, mas também jobs que ficaram presos em
+  // `running` (ex: processo caiu no meio de uma classificação) — sem isso,
+  // um job travado nunca seria pego de novo nem por esta função nem pela
+  // rota de reprocessamento (POST /api/import/process).
   const { data: jobs, error: jobsError } = await supabase
     .from("ai_processing_jobs")
     .select("id, conversation_id")
     .eq("company_id", companyId)
     .eq("job_type", "classify")
-    .eq("status", "queued")
+    .or(`status.eq.queued,and(status.eq.running,created_at.lt.${staleCutoff})`)
     .limit(limit);
 
   if (jobsError || !jobs) {
@@ -119,7 +128,7 @@ async function processOneJob(
   // como candidato preferencial em vez de exigir que a IA o "encontre" de novo.
   const { data: existingOpportunity } = await supabase
     .from("opportunities")
-    .select("id, potential_value_cents")
+    .select("id, potential_value_cents, status")
     .eq("conversation_id", conversationId)
     .maybeSingle();
 
@@ -184,6 +193,13 @@ async function processOneJob(
     opportunityId = inserted.id;
   }
 
+  if (existingOpportunity) {
+    // Reclassificação (ex: via /api/import/process): descarta os sinais da
+    // rodada anterior antes de gravar os novos, para não acumular sinais
+    // duplicados/contraditórios de múltiplas classificações da mesma conversa.
+    await supabase.from("opportunity_signals").delete().eq("opportunity_id", opportunityId);
+  }
+
   if (classification.signals.length > 0) {
     await supabase.from("opportunity_signals").insert(
       classification.signals.map((signal_type) => ({
@@ -196,7 +212,7 @@ async function processOneJob(
 
   await supabase.from("opportunity_status_history").insert({
     opportunity_id: opportunityId,
-    from_status: null,
+    from_status: existingOpportunity?.status ?? null,
     to_status: status,
     changed_by: "ai",
     reason: `Classificação automática (${classification.probableReason})`,

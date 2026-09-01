@@ -28,7 +28,10 @@ export function parseFlexibleDateToIso(input: string | null | undefined): string
   const brMatch = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if (brMatch) {
     const [, d, m, y] = brMatch;
-    const date = new Date(Number(y), Number(m) - 1, Number(d));
+    // Date.UTC (não `new Date(y, m-1, d)`) evita que o fuso horário do
+    // servidor desloque a data em um dia ao converter para ISO — importante
+    // porque este valor alimenta lib/scoring.ts (recência do score).
+    const date = new Date(Date.UTC(Number(y), Number(m) - 1, Number(d)));
     return Number.isNaN(date.getTime()) ? null : date.toISOString();
   }
 

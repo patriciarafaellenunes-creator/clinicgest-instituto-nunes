@@ -1,7 +1,16 @@
 import { NextResponse } from "next/server";
+import { timingSafeEqual } from "node:crypto";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import { assertMembership } from "@/lib/supabase/membership";
 import { processQueuedJobs } from "@/lib/ai/processJobs";
+
+/** Comparação em tempo constante — evita vazar o segredo por diferença de latência. */
+function isValidCronSecret(provided: string | null, expected: string | undefined): boolean {
+  if (!provided || !expected) return false;
+  const a = Buffer.from(provided);
+  const b = Buffer.from(expected);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
 
 /**
  * Reprocessa jobs de classificação ainda `queued` para uma empresa.
@@ -24,7 +33,7 @@ export async function POST(request: Request) {
   }
 
   const cronSecret = request.headers.get("x-cron-secret");
-  const isCron = Boolean(process.env.CRON_SECRET) && cronSecret === process.env.CRON_SECRET;
+  const isCron = isValidCronSecret(cronSecret, process.env.CRON_SECRET);
 
   if (!isCron) {
     try {

@@ -104,13 +104,18 @@ begin
   end loop;
 end $$;
 
--- ai_call_logs contém detalhe de chamadas de IA (explicabilidade/LGPD) —
--- leitura permitida a membros, mas nunca escrita pelo client (só pelo
--- worker via service role, que faz bypass de RLS).
+-- ai_call_logs contém detalhe de chamadas de IA (explicabilidade/LGPD).
+-- No MVP, o worker de classificação roda de forma síncrona dentro da própria
+-- requisição de um membro autenticado (ver lib/ai/processJobs.ts) — por isso
+-- membros também podem INSERIR o próprio log, não só ler. Nunca podem
+-- alterar/apagar um log já gravado (é o registro de auditoria da IA).
 drop policy ai_call_logs_member_all on ai_call_logs;
 create policy ai_call_logs_select_member on ai_call_logs
   for select
   using (is_active_member(company_id));
+create policy ai_call_logs_insert_member on ai_call_logs
+  for insert
+  with check (is_active_member(company_id));
 
 -- audit_log é append-only para o client: membros podem ler, mas não
 -- alterar/apagar (escrita normal acontece via server actions/rotas).
